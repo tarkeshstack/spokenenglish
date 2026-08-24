@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "SpeakEasy",
+    "slug": "spokenenglish",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "SpeakEasy needs the microphone to hear you practice speaking English.",
+        "NSSpeechRecognitionUsageDescription": "SpeakEasy uses speech recognition to turn what you say into text so it can check your grammar."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["android.permission.RECORD_AUDIO"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow SpeakEasy to use the microphone.",
+          "speechRecognitionPermission": "Allow SpeakEasy to use speech recognition to transcribe what you say.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+        }
+      ]
+    ]
+  }
+}
