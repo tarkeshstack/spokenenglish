@@ -104,6 +104,24 @@ npx expo run:android  # requires Android Studio / an emulator or device
 (Or build with [EAS Build](https://docs.expo.dev/build/introduction/) and
 install the resulting dev client on a device.)
 
+### Getting an installable APK (no local Android Studio needed)
+
+This repo includes an `eas.json` with a `preview` profile that produces a
+directly-installable `.apk` (not an `.aab`), built in Expo's cloud:
+
+```bash
+npm install -g eas-cli
+eas login              # free Expo account
+eas build -p android --profile preview
+```
+
+The first run will prompt to link/create an EAS project (writes an
+`extra.eas.projectId` into `app.json` — safe to commit). When the build
+finishes, `eas build` prints a download link for the `.apk`; install it on a
+device with "install from unknown sources" enabled, or run
+`eas build -p android --profile preview --local` to build it on your own
+machine instead of in the cloud.
+
 ## Notes / limitations
 
 - Grammar correction quality depends on the LanguageTool free tier, which is
