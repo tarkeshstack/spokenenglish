@@ -1,11 +1,19 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { WritingPad, WritingPadHandle } from "../components/WritingPad";
+import type { WritingPadHandle } from "../components/WritingPad";
 import { getLanguage } from "../data/languages";
 import { PracticeMode } from "../types";
 import { MatchResult, scoreAttempt } from "../utils/recognizer";
 import { recordAttempt } from "../utils/storage";
+
+// Lazily imported so its module body (which pulls in @shopify/react-native-skia)
+// only evaluates after skiaWebReady has resolved on web - the Skia web binding
+// reads the global CanvasKit object once at import time, and importing it
+// eagerly at the top of the bundle would run before LoadSkiaWeb() finishes.
+const WritingPad = lazy(() =>
+  import("../components/WritingPad").then((m) => ({ default: m.WritingPad }))
+);
 
 const MODE_LABELS: Record<PracticeMode, string> = {
   alphabet: "Alphabet",
@@ -136,7 +144,9 @@ export function PracticeScreen({ languageId, mode, onExit }: PracticeScreenProps
       <Text style={styles.targetChar}>{current.display}</Text>
 
       <View style={styles.padWrapper}>
-        <WritingPad ref={padRef} size={padSize} guideStrokes={current.strokes} />
+        <Suspense fallback={<View style={{ width: padSize, height: padSize }} />}>
+          <WritingPad ref={padRef} size={padSize} guideStrokes={current.strokes} />
+        </Suspense>
       </View>
 
       <View style={styles.messageArea}>

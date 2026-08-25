@@ -55,16 +55,21 @@ export const WritingPad = forwardRef<WritingPadHandle, WritingPadProps>(function
         setTick((n) => n + 1);
       },
       onPanResponderRelease: () => {
-        if (currentStroke.current.length > 1) {
-          setStrokes((prev) => [...prev, currentStroke.current]);
+        // Capture the finished points before resetting the ref - the
+        // setStrokes updater can run after this handler returns, by which
+        // point currentStroke.current would already be reassigned to [].
+        const finishedStroke = currentStroke.current;
+        if (finishedStroke.length > 1) {
+          setStrokes((prev) => [...prev, finishedStroke]);
         }
         currentStroke.current = [];
         setTick((n) => n + 1);
         onStrokeEnd?.();
       },
       onPanResponderTerminate: () => {
-        if (currentStroke.current.length > 1) {
-          setStrokes((prev) => [...prev, currentStroke.current]);
+        const finishedStroke = currentStroke.current;
+        if (finishedStroke.length > 1) {
+          setStrokes((prev) => [...prev, finishedStroke]);
         }
         currentStroke.current = [];
         setTick((n) => n + 1);
@@ -93,7 +98,8 @@ export const WritingPad = forwardRef<WritingPadHandle, WritingPadProps>(function
 
   const finishedInkPaths = useMemo(() => strokes.map((stroke) => toPathString(stroke)), [strokes]);
 
-  const currentInkPath = tick >= 0 && currentStroke.current.length > 1 ? toPathString(currentStroke.current) : null;
+  const currentInkPath =
+    tick >= 0 && currentStroke.current.length > 1 ? toPathString(currentStroke.current) : null;
 
   return (
     <View
