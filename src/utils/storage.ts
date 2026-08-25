@@ -23,6 +23,9 @@ export interface LanguageStats {
 
 export interface ScoreState {
   languages: Record<string, LanguageStats>;
+  /** Last language + mode picked on the home screen, so navigating back
+   * to it (or relaunching the app) doesn't reset to the default. */
+  lastSelection?: { languageId: string; mode: PracticeMode };
 }
 
 function emptyState(): ScoreState {
@@ -126,4 +129,21 @@ export async function saveLastIndex(
 
 export function getLastIndex(state: ScoreState, languageId: string, mode: PracticeMode): number {
   return state.languages[languageId]?.lastIndex?.[mode] ?? 0;
+}
+
+/** Persists which language + mode was selected on the home screen. */
+export async function saveLastSelection(languageId: string, mode: PracticeMode): Promise<void> {
+  try {
+    const state = await loadScores();
+    state.lastSelection = { languageId, mode };
+    await saveScores(state);
+  } catch {
+    // Not critical - the home screen just falls back to the default.
+  }
+}
+
+export function getLastSelection(
+  state: ScoreState
+): { languageId: string; mode: PracticeMode } | null {
+  return state.lastSelection ?? null;
 }

@@ -5,7 +5,14 @@ import { CharacterGrid } from "../components/CharacterGrid";
 import { LanguageDropdown } from "../components/LanguageDropdown";
 import { LANGUAGES, getLanguage } from "../data/languages";
 import { PracticeMode } from "../types";
-import { ScoreState, getLanguageStats, getLastIndex, loadScores } from "../utils/storage";
+import {
+  ScoreState,
+  getLanguageStats,
+  getLastIndex,
+  getLastSelection,
+  loadScores,
+  saveLastSelection,
+} from "../utils/storage";
 
 const MODE_LABELS: Record<PracticeMode, string> = {
   alphabet: "Alphabets",
@@ -24,16 +31,31 @@ export function HomeScreen({ onStart, onViewScores }: HomeScreenProps) {
   const [scores, setScores] = useState<ScoreState>({ languages: {} });
   const [languageId, setLanguageId] = useState(LANGUAGES[0].id);
   const [mode, setMode] = useState<PracticeMode>("alphabet");
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     loadScores().then((s) => {
-      if (!cancelled) setScores(s);
+      if (cancelled) return;
+      setScores(s);
+      const last = getLastSelection(s);
+      if (last) {
+        setLanguageId(last.languageId);
+        setMode(last.mode);
+      }
+      setInitialized(true);
     });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  // Remember the selection (survives going back to this screen, and
+  // relaunching the app) - skipped until the saved selection has loaded
+  // so it doesn't get clobbered by the default before that happens.
+  useEffect(() => {
+    if (initialized) saveLastSelection(languageId, mode);
+  }, [languageId, mode, initialized]);
 
   const language = getLanguage(languageId);
   const availableModes = useMemo(

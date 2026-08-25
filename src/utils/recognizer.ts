@@ -81,7 +81,11 @@ const DIAGONAL = Math.SQRT2 * SQUARE_SIZE;
  * have a nearby user point, using a generous radius relative to the
  * normalized square. Cheap stand-in for a full raster IoU. */
 function coverageRatio(userPoints: Point[], templatePoints: Point[]): number {
-  const radius = SQUARE_SIZE * 0.13;
+  // 20% of the normalized square - drifting up to a fifth of the letter's
+  // own size off the gray guide line still counts as "on" it, since a
+  // finger/stylus trace is never going to lie exactly on top of a thin
+  // printed line.
+  const radius = SQUARE_SIZE * 0.2;
   let covered = 0;
   for (const t of templatePoints) {
     let hit = false;
@@ -164,8 +168,14 @@ export function scoreAttempt(
     // directionScore must both be decent, otherwise a wrong-shape trace
     // that happens to fill the same bounding box (or a boxy scribble that
     // happens to run close to the template's actual ink) could slip
-    // through.
+    // through. These two gates carry the most weight: coverage was
+    // deliberately loosened (see coverageRatio's radius) so drifting off
+    // the guide line doesn't fail a correct letter, but that same
+    // looseness let genuinely different letters (e.g. Latin "L" vs "T")
+    // slip past a looser shapeScore/directionScore gate - raised both
+    // back up to require the actual letter shape and stroke direction to
+    // be right, independent of how closely the ink hugs the line.
     matched:
-      score >= threshold && coverage >= 0.45 && shapeScore >= 0.55 && directionScore >= 0.85,
+      score >= threshold && coverage >= 0.45 && shapeScore >= 0.75 && directionScore >= 0.9,
   };
 }
