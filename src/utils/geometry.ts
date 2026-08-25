@@ -161,16 +161,25 @@ export function translateToOrigin(points: Point[]): Point[] {
   return points.map((p) => ({ x: p.x - c.x, y: p.y - c.y }));
 }
 
-/** Uniformly scales points (independently per axis) into a `size`x`size` box,
- * using a percentile-trimmed bounding box (see robustBoundingBox) so outlier
- * points land slightly outside the square instead of dictating the scale. */
+/** Scales points into (at most) a `size`x`size` box using ONE shared scale
+ * factor for both axes - not independently per axis - so aspect ratio is
+ * preserved, using a percentile-trimmed bounding box (see
+ * robustBoundingBox) so outlier points land slightly outside the square
+ * instead of dictating the scale.
+ *
+ * Independent per-axis scaling was tried and is actively wrong for
+ * anything close to a straight line (e.g. "I", "1", the Devanagari danda):
+ * the near-zero extent on the thin axis means even a fraction of a pixel
+ * of natural hand tremor gets divided by a near-zero width and blown up
+ * to fill the whole square, turning honest small wobble into what looks
+ * like a wide zigzag. A shared scale factor lets a thin shape stay thin
+ * after normalization, exactly like it should. */
 export function scaleToSquare(points: Point[], size: number): Point[] {
   const box = robustBoundingBox(points);
-  const width = box.width || 1;
-  const height = box.height || 1;
+  const scale = size / Math.max(box.width, box.height, 1e-6);
   return points.map((p) => ({
-    x: ((p.x - box.minX) / width) * size,
-    y: ((p.y - box.minY) / height) * size,
+    x: (p.x - box.minX) * scale,
+    y: (p.y - box.minY) * scale,
   }));
 }
 
@@ -229,4 +238,66 @@ function meanNearestDistance(from: Point[], to: Point[]): number {
  */
 export function symmetricNearestDistance(a: Point[], b: Point[]): number {
   return (meanNearestDistance(a, b) + meanNearestDistance(b, a)) / 2;
+}
+
+const DIRECTION_BINS = 8;
+
+/**
+ * Histogram of tangent directions along a set of strokes, binned mod 180°
+ * (undirected - a stroke traced backwards, or a loop drawn clockwise vs
+ * counterclockwise, still produces the same histogram) and weighted by
+ * segment length so long straight runs count more than jittery short hops.
+ *
+ * This exists because point-cloud distance alone (see
+ * symmetricNearestDistance) can't tell a smooth loop from a scribble that
+ * merely visits the same neighborhood of points in a jagged path: a
+ * rectangle traced corner-to-corner and a rounded letter that fills the
+ * same bounding box can land very close in point-cloud terms while having
+ * totally different turning behavior (four sharp corners vs. a
+ * continuously varying curve). Comparing direction histograms catches
+ * that difference directly.
+ */
+export function directionHistogram(strokes: Stroke[]): number[] {
+  const hist = new Array(DIRECTION_BINS).fill(0);
+  let total = 0;
+  for (const stroke of strokes) {
+    for (let i = 1; i < stroke.length; i++) {
+      const a = stroke[i - 1];
+      const b = stroke[i];
+      const len = distance(a, b);
+      if (len === 0) continue;
+      let angle = Math.atan2(b.y - a.y, b.x - a.x);
+      if (angle < 0) angle += Math.PI; // fold to [0, PI) - undirected
+
+      // Split this segment's weight between its two nearest bin centers
+      // (linear/triangular interpolation) instead of hard-assigning to one
+      // bin. Two angles a hair apart on either side of a bin edge are
+      // visually identical directions but would otherwise land in
+      // different bins with zero overlap - e.g. an almost-perfectly
+      // vertical line can read as 89.9° or 90.1° depending on a fraction
+      // of a pixel of jitter, which under hard binning flips it from
+      // "100% bin 3" to "100% bin 4" and looks completely different from
+      // itself. Soft binning makes that a small, continuous change.
+      const pos = (angle / Math.PI) * DIRECTION_BINS - 0.5;
+      const i0 = Math.floor(pos);
+      const frac = pos - i0;
+      const bin0 = ((i0 % DIRECTION_BINS) + DIRECTION_BINS) % DIRECTION_BINS;
+      const bin1 = (bin0 + 1) % DIRECTION_BINS;
+      hist[bin0] += len * (1 - frac);
+      hist[bin1] += len * frac;
+      total += len;
+    }
+  }
+  if (total === 0) return hist;
+  return hist.map((v) => v / total);
+}
+
+/** 1 = identical direction distributions, 0 = totally different (based on
+ * total variation distance between the two histograms). */
+export function directionSimilarity(a: number[], b: number[]): number {
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff += Math.abs(a[i] - b[i]);
+  }
+  return Math.max(0, 1 - diff / 2);
 }

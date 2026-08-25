@@ -1,8 +1,11 @@
 import {
   Point,
   Stroke,
+  directionHistogram,
+  directionSimilarity,
   flattenStrokes,
   normalize,
+  resample,
   resampleStrokes,
   robustBoundingBox,
   rotateBy,
@@ -11,6 +14,15 @@ import {
 } from "./geometry";
 
 const RESAMPLE_POINTS = 64;
+// Points per stroke used only for direction-histogram tangents (see
+// scoreAttempt): deliberately coarse so each tangent segment spans a
+// meaningful fraction of the stroke's own length. Consecutive *original*
+// points can be only a pixel or two apart (fast sampling, or two of the
+// same point from click jitter), and a hand's natural tremor is a fixed
+// amplitude - at that spacing the tremor would dwarf the true direction
+// signal. Spacing samples out by length first makes the segment long
+// enough that genuine direction dominates the noise.
+const DIRECTION_POINTS_PER_STROKE = 10;
 const SQUARE_SIZE = 100;
 // Letters are orientation-sensitive (M vs W, 6 vs 9, b vs p), so unlike a
 // classic $1 gesture recognizer we deliberately do NOT rotate to the
@@ -22,15 +34,16 @@ const ROTATION_STEP_DEGREES = 2;
 /** Scales every stroke into the fixed comparison square using ONE shared
  * transform derived from the combined bounding box of all strokes (so
  * relative proportions between strokes are preserved), keeping strokes
- * separate rather than flattening them into one point list. */
+ * separate rather than flattening them into one point list. Uses a single
+ * scale factor for both axes (not independent per-axis) - see
+ * scaleToSquare in geometry.ts for why independent axes are wrong. */
 function normalizeStrokes(strokes: Stroke[]): Stroke[] {
   const box = robustBoundingBox(flattenStrokes(strokes));
-  const width = box.width || 1;
-  const height = box.height || 1;
+  const scale = SQUARE_SIZE / Math.max(box.width, box.height, 1e-6);
   return strokes.map((stroke) =>
     stroke.map((p) => ({
-      x: ((p.x - box.minX) / width) * SQUARE_SIZE,
-      y: ((p.y - box.minY) / height) * SQUARE_SIZE,
+      x: (p.x - box.minX) * scale,
+      y: (p.y - box.minY) * scale,
     }))
   );
 }
@@ -120,18 +133,39 @@ export function scoreAttempt(
   const shapeScore = Math.max(0, 1 - dist / (0.5 * DIAGONAL));
   const coverage = coverageRatio(normalizedUser, normalizedTemplate);
 
+  // Point-cloud distance alone can't tell a smooth curved letter from a
+  // scribble that merely visits the same neighborhood in a jagged path -
+  // e.g. tracing the four corners of a letter's own bounding box can land
+  // close to a big rounded loop in shapeScore/coverage terms despite having
+  // completely different turning behavior. Comparing turning-direction
+  // histograms (see directionHistogram) catches that: a real curve's
+  // tangent sweeps continuously through many directions, a boxy scribble's
+  // concentrates in a few.
+  const coarsen = (strokes: Stroke[]): Stroke[] =>
+    strokes
+      .filter((s) => s.length > 0)
+      .map((s) => resample(s, DIRECTION_POINTS_PER_STROKE));
+  const directionScore = directionSimilarity(
+    directionHistogram(coarsen(normalizeStrokes(userStrokes))),
+    directionHistogram(coarsen(normalizeStrokes(templateStrokes)))
+  );
+
   // Blend: shape closeness matters most (and is the only term sensitive to
-  // wrong orientation), coverage catches "right bbox, ink in the wrong
+  // wrong orientation), direction catches "right position, wrong turning
+  // behavior" (see above), coverage catches "right bbox, ink in the wrong
   // place", length ratio catches "too few points to actually be a real
   // trace of the letter".
-  const score = shapeScore * 0.6 + coverage * 0.2 + lengthRatio * 0.2;
+  const score = shapeScore * 0.45 + directionScore * 0.2 + coverage * 0.15 + lengthRatio * 0.2;
 
   return {
     score: Math.min(1, Math.max(0, score)),
     coverage,
-    // Coverage/length alone can't carry a match - shapeScore must also be
-    // decent, otherwise a wrong-orientation trace that happens to fill the
-    // same bounding box could slip through.
-    matched: score >= threshold && coverage >= 0.5 && shapeScore >= 0.55,
+    // None of the other terms alone can carry a match - shapeScore and
+    // directionScore must both be decent, otherwise a wrong-shape trace
+    // that happens to fill the same bounding box (or a boxy scribble that
+    // happens to run close to the template's actual ink) could slip
+    // through.
+    matched:
+      score >= threshold && coverage >= 0.5 && shapeScore >= 0.55 && directionScore >= 0.85,
   };
 }
