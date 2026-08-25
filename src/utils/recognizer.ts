@@ -75,7 +75,7 @@ function coverageRatio(userPoints: Point[], templatePoints: Point[]): number {
 export function scoreAttempt(
   userStrokes: Stroke[],
   templateStrokes: Stroke[],
-  threshold = 0.6
+  threshold = 0.9
 ): MatchResult {
   const userPoints = flattenStrokes(userStrokes);
   const templatePoints = flattenStrokes(templateStrokes);
