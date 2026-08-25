@@ -81,11 +81,10 @@ const DIAGONAL = Math.SQRT2 * SQUARE_SIZE;
  * have a nearby user point, using a generous radius relative to the
  * normalized square. Cheap stand-in for a full raster IoU. */
 function coverageRatio(userPoints: Point[], templatePoints: Point[]): number {
-  // 20% of the normalized square - drifting up to a fifth of the letter's
-  // own size off the gray guide line still counts as "on" it, since a
-  // finger/stylus trace is never going to lie exactly on top of a thin
-  // printed line.
-  const radius = SQUARE_SIZE * 0.2;
+  // 40% of the normalized square - drifting well off the gray guide line
+  // still counts as "on" it, since a finger/stylus trace is never going
+  // to lie exactly on top of a thin printed line and shouldn't need to.
+  const radius = SQUARE_SIZE * 0.4;
   let covered = 0;
   for (const t of templatePoints) {
     let hit = false;
@@ -104,7 +103,7 @@ function coverageRatio(userPoints: Point[], templatePoints: Point[]): number {
 export function scoreAttempt(
   userStrokes: Stroke[],
   templateStrokes: Stroke[],
-  threshold = 0.8
+  threshold = 0.78
 ): MatchResult {
   const userPoints = flattenStrokes(userStrokes);
   const templatePoints = flattenStrokes(templateStrokes);
@@ -171,11 +170,11 @@ export function scoreAttempt(
     // through. These two gates carry the most weight: coverage was
     // deliberately loosened (see coverageRatio's radius) so drifting off
     // the guide line doesn't fail a correct letter, but that same
-    // looseness let genuinely different letters (e.g. Latin "L" vs "T")
-    // slip past a looser shapeScore/directionScore gate - raised both
-    // back up to require the actual letter shape and stroke direction to
-    // be right, independent of how closely the ink hugs the line.
+    // looseness lets genuinely different letters cross-match more easily
+    // - shapeScore/directionScore stay high enough to still catch a
+    // clearly wrong letter, while allowing plenty of room for a rough
+    // but genuine attempt at the right one.
     matched:
-      score >= threshold && coverage >= 0.45 && shapeScore >= 0.75 && directionScore >= 0.9,
+      score >= threshold && coverage >= 0.4 && shapeScore >= 0.7 && directionScore >= 0.85,
   };
 }
