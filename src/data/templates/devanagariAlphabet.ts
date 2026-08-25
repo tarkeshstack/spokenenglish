@@ -9,16 +9,25 @@ import { arc, join, line } from "./builders";
  * font outlines.
  */
 
-const BAR_LEFT = 15;
-const BAR_RIGHT = 82;
 const BAR_Y = 15;
+const BAR_PADDING = 4;
 
-function bar(x1 = BAR_LEFT, x2 = BAR_RIGHT): Stroke {
-  return line({ x: x1, y: BAR_Y }, { x: x2, y: BAR_Y });
-}
-
-function withBar(body: Stroke[], x1 = BAR_LEFT, x2 = BAR_RIGHT): Stroke[] {
-  return [bar(x1, x2), ...body];
+/** Prepends a shirorekha that spans exactly this character's own body
+ * width (plus a little padding), instead of a fixed span - a fixed-width
+ * bar left many narrower letters with a chunk of bar floating past the
+ * body with nothing underneath it. */
+function withBar(body: Stroke[]): Stroke[] {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  for (const stroke of body) {
+    for (const p of stroke) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+    }
+  }
+  const x1 = Math.max(5, minX - BAR_PADDING);
+  const x2 = Math.min(95, maxX + BAR_PADDING);
+  return [line({ x: x1, y: BAR_Y }, { x: x2, y: BAR_Y }), ...body];
 }
 
 export const DEVANAGARI_VOWELS: Record<string, Stroke[]> = {
