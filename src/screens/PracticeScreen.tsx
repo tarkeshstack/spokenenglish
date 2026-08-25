@@ -1,12 +1,13 @@
 import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Dimensions, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CharacterGrid } from "../components/CharacterGrid";
 import type { WritingPadHandle } from "../components/WritingPad";
 import { getLanguage } from "../data/languages";
 import { PracticeMode } from "../types";
 import { MatchResult, scoreAttempt } from "../utils/recognizer";
 import { speakCharacter } from "../utils/speech";
-import { recordAttempt } from "../utils/storage";
+import { ScoreState, getLanguageStats, loadScores, recordAttempt, saveLastIndex } from "../utils/storage";
 
 // Lazily imported so its module body (which pulls in @shopify/react-native-skia)
 // only evaluates after skiaWebReady has resolved on web - the Skia web binding
@@ -43,23 +44,29 @@ function pickRandom(list: string[]): string {
 interface PracticeScreenProps {
   languageId: string;
   mode: PracticeMode;
+  startIndex?: number;
   onExit: () => void;
 }
 
-export function PracticeScreen({ languageId, mode, onExit }: PracticeScreenProps) {
+export function PracticeScreen({ languageId, mode, startIndex = 0, onExit }: PracticeScreenProps) {
   const insets = useSafeAreaInsets();
   const language = getLanguage(languageId);
   const characters = language?.modes[mode] ?? [];
 
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(
+    characters.length > 0 ? ((startIndex % characters.length) + characters.length) % characters.length : 0
+  );
   const [result, setResult] = useState<MatchResult | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [sessionPoints, setSessionPoints] = useState(0);
   const [streak, setStreak] = useState(0);
+  const [scores, setScores] = useState<ScoreState>({ languages: {} });
+  const [gridOpen, setGridOpen] = useState(false);
   const padRef = useRef<WritingPadHandle>(null);
   const autoAdvanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    loadScores().then(setScores);
     return () => {
       if (autoAdvanceTimer.current) clearTimeout(autoAdvanceTimer.current);
     };
@@ -72,6 +79,10 @@ export function PracticeScreen({ languageId, mode, onExit }: PracticeScreenProps
       speakCharacter(current.display, language.speechLocale);
     }
   }, [language, current]);
+
+  useEffect(() => {
+    saveLastIndex(languageId, mode, index);
+  }, [languageId, mode, index]);
 
   const padSize = useMemo(() => {
     const { width, height } = Dimensions.get("window");
@@ -114,13 +125,14 @@ export function PracticeScreen({ languageId, mode, onExit }: PracticeScreenProps
     setResult(match);
     setMessage(match.matched ? pickRandom(CONGRATS_MESSAGES) : pickRandom(TRY_AGAIN_MESSAGES));
 
-    const { pointsAwarded, streak: newStreak } = await recordAttempt(
+    const { state, pointsAwarded, streak: newStreak } = await recordAttempt(
       languageId,
       mode,
       current.id,
       match.matched,
       match.score
     );
+    setScores(state);
     setStreak(newStreak);
     if (match.matched) {
       setSessionPoints((p) => p + pointsAwarded);
@@ -134,14 +146,19 @@ export function PracticeScreen({ languageId, mode, onExit }: PracticeScreenProps
         <TouchableOpacity onPress={onExit} hitSlop={12}>
           <Text style={styles.backText}>‹ Back</Text>
         </TouchableOpacity>
-        <View style={styles.headerCenter}>
+        <TouchableOpacity
+          style={styles.headerCenter}
+          onPress={() => setGridOpen(true)}
+          activeOpacity={0.7}
+          hitSlop={8}
+        >
           <Text style={styles.headerTitle}>
             {language.flagEmoji} {language.name} · {MODE_LABELS[mode]}
           </Text>
           <Text style={styles.headerProgress}>
-            {index + 1} / {characters.length}
+            {index + 1} / {characters.length} · tap to jump ▤
           </Text>
-        </View>
+        </TouchableOpacity>
         <View style={styles.headerStats}>
           <Text style={styles.headerStatsText}>{sessionPoints} pts</Text>
           {streak > 1 && <Text style={styles.streakText}>🔥 {streak}</Text>}
@@ -184,6 +201,31 @@ export function PracticeScreen({ languageId, mode, onExit }: PracticeScreenProps
           <Text style={styles.secondaryButtonText}>Skip ›</Text>
         </TouchableOpacity>
       </View>
+
+      <Modal visible={gridOpen} transparent animationType="slide" onRequestClose={() => setGridOpen(false)}>
+        <View style={styles.gridBackdrop}>
+          <View style={[styles.gridSheet, { paddingBottom: insets.bottom + 20 }]}>
+            <View style={styles.gridHeader}>
+              <Text style={styles.gridTitle}>Jump to a character</Text>
+              <TouchableOpacity onPress={() => setGridOpen(false)} hitSlop={12}>
+                <Text style={styles.gridClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={styles.gridScrollContent}>
+              <CharacterGrid
+                characters={characters}
+                mode={mode}
+                stats={getLanguageStats(scores, languageId)}
+                currentIndex={index}
+                onSelect={(next) => {
+                  goToIndex(next);
+                  setGridOpen(false);
+                }}
+              />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -254,4 +296,22 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   secondaryButtonText: { color: "#4338ca", fontWeight: "700", fontSize: 15 },
+  gridBackdrop: { flex: 1, backgroundColor: "rgba(15,17,35,0.4)", justifyContent: "flex-end" },
+  gridSheet: {
+    backgroundColor: "#f4f5fb",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "75%",
+    paddingTop: 16,
+    paddingHorizontal: 20,
+  },
+  gridHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  gridTitle: { fontSize: 16, fontWeight: "800", color: "#1f2340" },
+  gridClose: { fontSize: 18, color: "#8b8fb3", fontWeight: "700" },
+  gridScrollContent: { paddingBottom: 8 },
 });

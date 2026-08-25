@@ -16,6 +16,9 @@ export interface LanguageStats {
   currentStreak: number;
   bestStreak: number;
   characters: Record<string, CharacterStats>;
+  /** Index of the last character visited in each mode, so practice can
+   * resume where it left off instead of always restarting at 0. */
+  lastIndex?: Partial<Record<PracticeMode, number>>;
 }
 
 export interface ScoreState {
@@ -100,4 +103,27 @@ export async function resetScores(): Promise<ScoreState> {
 
 export function getLanguageStats(state: ScoreState, languageId: string): LanguageStats {
   return state.languages[languageId] ?? emptyLanguageStats();
+}
+
+/** Persists which character index the user was on, so a later "Resume"
+ * can pick up from there. Best-effort: called on every character change,
+ * so failures are swallowed rather than surfaced. */
+export async function saveLastIndex(
+  languageId: string,
+  mode: PracticeMode,
+  index: number
+): Promise<void> {
+  try {
+    const state = await loadScores();
+    const lang = state.languages[languageId] ?? emptyLanguageStats();
+    lang.lastIndex = { ...lang.lastIndex, [mode]: index };
+    state.languages[languageId] = lang;
+    await saveScores(state);
+  } catch {
+    // Not critical - practice still works without a saved position.
+  }
+}
+
+export function getLastIndex(state: ScoreState, languageId: string, mode: PracticeMode): number {
+  return state.languages[languageId]?.lastIndex?.[mode] ?? 0;
 }

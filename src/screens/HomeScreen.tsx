@@ -1,23 +1,29 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { LANGUAGES } from "../data/languages";
+import { CharacterGrid } from "../components/CharacterGrid";
+import { LanguageDropdown } from "../components/LanguageDropdown";
+import { LANGUAGES, getLanguage } from "../data/languages";
 import { PracticeMode } from "../types";
-import { ScoreState, loadScores, getLanguageStats } from "../utils/storage";
+import { ScoreState, getLanguageStats, getLastIndex, loadScores } from "../utils/storage";
 
 const MODE_LABELS: Record<PracticeMode, string> = {
-  alphabet: "Alphabet",
+  alphabet: "Alphabets",
   numbers: "Numbers",
 };
 
+const MODE_ORDER: PracticeMode[] = ["alphabet", "numbers"];
+
 interface HomeScreenProps {
-  onStart: (languageId: string, mode: PracticeMode) => void;
+  onStart: (languageId: string, mode: PracticeMode, startIndex: number) => void;
   onViewScores: () => void;
 }
 
 export function HomeScreen({ onStart, onViewScores }: HomeScreenProps) {
   const insets = useSafeAreaInsets();
   const [scores, setScores] = useState<ScoreState>({ languages: {} });
+  const [languageId, setLanguageId] = useState(LANGUAGES[0].id);
+  const [mode, setMode] = useState<PracticeMode>("alphabet");
 
   useEffect(() => {
     let cancelled = false;
@@ -29,6 +35,21 @@ export function HomeScreen({ onStart, onViewScores }: HomeScreenProps) {
     };
   }, []);
 
+  const language = getLanguage(languageId);
+  const availableModes = useMemo(
+    () => MODE_ORDER.filter((m) => language?.modes[m]),
+    [language]
+  );
+  useEffect(() => {
+    if (availableModes.length > 0 && !availableModes.includes(mode)) {
+      setMode(availableModes[0]);
+    }
+  }, [availableModes, mode]);
+
+  const characters = language?.modes[mode] ?? [];
+  const stats = getLanguageStats(scores, languageId);
+  const lastIndex = getLastIndex(scores, languageId, mode);
+  const hasProgress = lastIndex > 0 && lastIndex < characters.length;
   const totalPoints = Object.values(scores.languages).reduce((sum, l) => sum + l.points, 0);
 
   return (
@@ -47,33 +68,54 @@ export function HomeScreen({ onStart, onViewScores }: HomeScreenProps) {
         <Text style={styles.scoreLink}>View scoreboard ›</Text>
       </TouchableOpacity>
 
-      {LANGUAGES.map((lang) => {
-        const stats = getLanguageStats(scores, lang.id);
-        return (
-          <View key={lang.id} style={styles.languageCard}>
-            <View style={styles.languageHeader}>
-              <Text style={styles.flag}>{lang.flagEmoji}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.languageName}>{lang.name}</Text>
-                <Text style={styles.languageNative}>{lang.nativeName}</Text>
-              </View>
-              <Text style={styles.languagePoints}>{stats.points} pts</Text>
-            </View>
-            <View style={styles.modeRow}>
-              {(Object.keys(lang.modes) as PracticeMode[]).map((mode) => (
-                <TouchableOpacity
-                  key={mode}
-                  style={styles.modeButton}
-                  onPress={() => onStart(lang.id, mode)}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.modeButtonText}>{MODE_LABELS[mode]}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        );
-      })}
+      <LanguageDropdown languages={LANGUAGES} selectedId={languageId} onSelect={setLanguageId} />
+
+      <View style={styles.modeTabs}>
+        {availableModes.map((m) => (
+          <TouchableOpacity
+            key={m}
+            style={[styles.modeTab, mode === m && styles.modeTabActive]}
+            onPress={() => setMode(m)}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.modeTabText, mode === m && styles.modeTabTextActive]}>
+              {MODE_LABELS[m]}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.actionsRow}>
+        {hasProgress && (
+          <TouchableOpacity
+            style={styles.primaryAction}
+            onPress={() => onStart(languageId, mode, lastIndex)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.primaryActionText}>
+              ▶ Resume ({lastIndex + 1}/{characters.length})
+            </Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={[styles.secondaryAction, !hasProgress && styles.primaryAction]}
+          onPress={() => onStart(languageId, mode, 0)}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.secondaryActionText, !hasProgress && styles.primaryActionText]}>
+            {hasProgress ? "↺ Start again" : "▶ Start practice"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <Text style={styles.gridHeading}>Jump to any character</Text>
+      <CharacterGrid
+        characters={characters}
+        mode={mode}
+        stats={stats}
+        currentIndex={hasProgress ? lastIndex : undefined}
+        onSelect={(index) => onStart(languageId, mode, index)}
+      />
 
       <Text style={styles.footerNote}>
         Practice guides are simplified stroke outlines to help you learn the basic shape and stroke
@@ -95,34 +137,45 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 16,
   },
   scoreLabel: { color: "#c7d2fe", fontSize: 13 },
   scoreValue: { color: "#ffffff", fontSize: 24, fontWeight: "800", marginTop: 2 },
   scoreLink: { color: "#e0e7ff", fontSize: 13, fontWeight: "600" },
-  languageCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
-  },
-  languageHeader: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  flag: { fontSize: 30, marginRight: 12 },
-  languageName: { fontSize: 17, fontWeight: "700", color: "#1f2340" },
-  languageNative: { fontSize: 13, color: "#8b8fb3" },
-  languagePoints: { fontSize: 14, fontWeight: "700", color: "#4338ca" },
-  modeRow: { flexDirection: "row", gap: 10 },
-  modeButton: {
+  modeTabs: {
+    flexDirection: "row",
     backgroundColor: "#eef0fb",
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    borderRadius: 14,
+    padding: 4,
+    marginTop: 12,
+    gap: 4,
   },
-  modeButtonText: { color: "#4338ca", fontWeight: "700", fontSize: 14 },
-  footerNote: { fontSize: 12, color: "#9296b8", textAlign: "center", marginTop: 12, lineHeight: 18 },
+  modeTab: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  modeTabActive: { backgroundColor: "#4338ca" },
+  modeTabText: { fontSize: 14, fontWeight: "700", color: "#6b7099" },
+  modeTabTextActive: { color: "#ffffff" },
+  actionsRow: { flexDirection: "row", gap: 10, marginTop: 16 },
+  primaryAction: {
+    flex: 1,
+    backgroundColor: "#4338ca",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  primaryActionText: { color: "#ffffff", fontWeight: "700", fontSize: 14 },
+  secondaryAction: {
+    flex: 1,
+    backgroundColor: "#eef0fb",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  secondaryActionText: { color: "#4338ca", fontWeight: "700", fontSize: 14 },
+  gridHeading: { fontSize: 14, fontWeight: "700", color: "#1f2340", marginTop: 24, marginBottom: 12 },
+  footerNote: { fontSize: 12, color: "#9296b8", textAlign: "center", marginTop: 24, lineHeight: 18 },
 });

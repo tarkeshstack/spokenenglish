@@ -9,7 +9,7 @@ import { skiaWebReady } from "./src/utils/loadSkiaWeb";
 
 type Screen =
   | { name: "home" }
-  | { name: "practice"; languageId: string; mode: PracticeMode }
+  | { name: "practice"; languageId: string; mode: PracticeMode; startIndex: number }
   | { name: "scoreboard" };
 
 export default function App() {
@@ -26,7 +26,9 @@ export default function App() {
     <SafeAreaProvider>
       {screen.name === "home" && (
         <HomeScreen
-          onStart={(languageId, mode) => setScreen({ name: "practice", languageId, mode })}
+          onStart={(languageId, mode, startIndex) =>
+            setScreen({ name: "practice", languageId, mode, startIndex })
+          }
           onViewScores={() => setScreen({ name: "scoreboard" })}
         />
       )}
@@ -34,6 +36,7 @@ export default function App() {
         <PracticeScreen
           languageId={screen.languageId}
           mode={screen.mode}
+          startIndex={screen.startIndex}
           onExit={() => setScreen({ name: "home" })}
         />
       )}

@@ -100,7 +100,7 @@ function coverageRatio(userPoints: Point[], templatePoints: Point[]): number {
 export function scoreAttempt(
   userStrokes: Stroke[],
   templateStrokes: Stroke[],
-  threshold = 0.85
+  threshold = 0.8
 ): MatchResult {
   const userPoints = flattenStrokes(userStrokes);
   const templatePoints = flattenStrokes(templateStrokes);
@@ -166,6 +166,6 @@ export function scoreAttempt(
     // happens to run close to the template's actual ink) could slip
     // through.
     matched:
-      score >= threshold && coverage >= 0.5 && shapeScore >= 0.55 && directionScore >= 0.85,
+      score >= threshold && coverage >= 0.45 && shapeScore >= 0.55 && directionScore >= 0.85,
   };
 }
