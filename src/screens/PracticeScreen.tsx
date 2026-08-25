@@ -5,6 +5,7 @@ import type { WritingPadHandle } from "../components/WritingPad";
 import { getLanguage } from "../data/languages";
 import { PracticeMode } from "../types";
 import { MatchResult, scoreAttempt } from "../utils/recognizer";
+import { speakCharacter } from "../utils/speech";
 import { recordAttempt } from "../utils/storage";
 
 // Lazily imported so its module body (which pulls in @shopify/react-native-skia)
@@ -65,6 +66,12 @@ export function PracticeScreen({ languageId, mode, onExit }: PracticeScreenProps
   }, []);
 
   const current = characters[index];
+
+  useEffect(() => {
+    if (language && current) {
+      speakCharacter(current.display, language.speechLocale);
+    }
+  }, [language, current]);
 
   const padSize = useMemo(() => {
     const { width, height } = Dimensions.get("window");
@@ -141,7 +148,16 @@ export function PracticeScreen({ languageId, mode, onExit }: PracticeScreenProps
         </View>
       </View>
 
-      <Text style={styles.targetChar}>{current.display}</Text>
+      <View style={styles.targetRow}>
+        <Text style={styles.targetChar}>{current.display}</Text>
+        <TouchableOpacity
+          style={styles.speakerButton}
+          hitSlop={10}
+          onPress={() => speakCharacter(current.display, language.speechLocale)}
+        >
+          <Text style={styles.speakerIcon}>🔊</Text>
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.padWrapper}>
         <Suspense fallback={<View style={{ width: padSize, height: padSize }} />}>
@@ -189,14 +205,29 @@ const styles = StyleSheet.create({
   headerStats: { alignItems: "flex-end", minWidth: 60 },
   headerStatsText: { fontSize: 13, fontWeight: "700", color: "#4338ca" },
   streakText: { fontSize: 12, color: "#d97706", marginTop: 2 },
+  targetRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 8,
+  },
   targetChar: {
     textAlign: "center",
     fontSize: 40,
     fontWeight: "800",
     color: "#1f2340",
-    marginTop: 4,
-    marginBottom: 8,
   },
+  speakerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#eef0fb",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  speakerIcon: { fontSize: 18 },
   padWrapper: { alignItems: "center", justifyContent: "center" },
   messageArea: { minHeight: 40, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
   message: { fontSize: 15, fontWeight: "600", textAlign: "center" },

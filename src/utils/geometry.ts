@@ -68,6 +68,45 @@ export function resample(points: Point[], n: number): Point[] {
   return resampled.slice(0, n);
 }
 
+/** Total ink length across all strokes - unlike pathLength(flattenStrokes(...)),
+ * this never counts the "jump" between one stroke's end and the next
+ * stroke's start as real ink. */
+export function strokesPathLength(strokes: Stroke[]): number {
+  return strokes.reduce((sum, stroke) => sum + pathLength(stroke), 0);
+}
+
+/**
+ * Resamples every stroke independently into a combined cloud of `n` points
+ * total, allocated proportionally to each stroke's share of the total ink
+ * length (minimum 2 points per non-empty stroke so short strokes, like a
+ * crossbar, aren't resampled away entirely).
+ *
+ * This matters because resampling the flattened (concatenated) points
+ * directly - i.e. resample(flattenStrokes(strokes), n) - treats the
+ * straight-line "jump" between one stroke's end and the next stroke's
+ * start as if it were real ink, wasting resample points on empty space
+ * and making the result depend on what order the strokes happen to be in.
+ * Resampling per-stroke and combining avoids both problems.
+ */
+export function resampleStrokes(strokes: Stroke[], n: number): Point[] {
+  const nonEmpty = strokes.filter((s) => s.length > 0);
+  if (nonEmpty.length === 0) return [];
+
+  const lengths = nonEmpty.map((s) => Math.max(pathLength(s), 0.01));
+  const totalLength = lengths.reduce((a, b) => a + b, 0);
+  const minPerStroke = Math.min(2, Math.floor(n / nonEmpty.length) || 1);
+
+  const counts = lengths.map((len) =>
+    Math.max(minPerStroke, Math.round((len / totalLength) * n))
+  );
+
+  const result: Point[] = [];
+  for (let i = 0; i < nonEmpty.length; i++) {
+    result.push(...resample(nonEmpty[i], counts[i]));
+  }
+  return result;
+}
+
 export function centroid(points: Point[]): Point {
   const sum = points.reduce(
     (acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }),
@@ -86,21 +125,60 @@ export function boundingBox(points: Point[]) {
   return { minX, maxX, minY, maxY, width: maxX - minX, height: maxY - minY };
 }
 
+function percentile(sortedValues: number[], p: number): number {
+  if (sortedValues.length === 0) return 0;
+  if (sortedValues.length === 1) return sortedValues[0];
+  const idx = (sortedValues.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sortedValues[lo];
+  return sortedValues[lo] + (sortedValues[hi] - sortedValues[lo]) * (idx - lo);
+}
+
+/**
+ * Bounding box using the 5th/95th percentile of each axis instead of the
+ * true min/max. A single shaky touch point near the end of a short stroke
+ * can otherwise shift the true min/max noticeably more on one axis than
+ * the other (e.g. a small letter's height jumping 40 -> 45 while its width
+ * barely moves), and since scaleToSquare scales each axis independently,
+ * that one outlier point ends up warping the whole shape's aspect ratio -
+ * worse the smaller/more compact the character, which is common for many
+ * Devanagari/Tamil/Kannada letters built from a couple of short strokes.
+ */
+export function robustBoundingBox(points: Point[]) {
+  const xs = points.map((p) => p.x).sort((a, b) => a - b);
+  const ys = points.map((p) => p.y).sort((a, b) => a - b);
+  const minX = percentile(xs, 0.05);
+  const maxX = percentile(xs, 0.95);
+  const minY = percentile(ys, 0.05);
+  const maxY = percentile(ys, 0.95);
+  return { minX, maxX, minY, maxY, width: maxX - minX, height: maxY - minY };
+}
+
 /** Translates points so their centroid sits at the origin. */
 export function translateToOrigin(points: Point[]): Point[] {
   const c = centroid(points);
   return points.map((p) => ({ x: p.x - c.x, y: p.y - c.y }));
 }
 
-/** Uniformly scales points (independently per axis) into a `size`x`size` box. */
+/** Uniformly scales points (independently per axis) into a `size`x`size` box,
+ * using a percentile-trimmed bounding box (see robustBoundingBox) so outlier
+ * points land slightly outside the square instead of dictating the scale. */
 export function scaleToSquare(points: Point[], size: number): Point[] {
-  const box = boundingBox(points);
+  const box = robustBoundingBox(points);
   const width = box.width || 1;
   const height = box.height || 1;
   return points.map((p) => ({
     x: ((p.x - box.minX) / width) * size,
     y: ((p.y - box.minY) / height) * size,
   }));
+}
+
+/** Scale-to-square + translate-to-origin, the standard normalization for
+ * comparing two point clouds regardless of their original position/size.
+ * Deliberately doesn't rotate - see recognizer.ts for why. */
+export function normalize(points: Point[], size: number): Point[] {
+  return translateToOrigin(scaleToSquare(points, size));
 }
 
 export function rotateBy(points: Point[], radians: number): Point[] {
@@ -123,12 +201,32 @@ export function indicativeAngle(points: Point[]): number {
   return Math.atan2(points[0].y - c.y, points[0].x - c.x);
 }
 
-export function averagePointDistance(a: Point[], b: Point[]): number {
-  const n = Math.min(a.length, b.length);
-  if (n === 0) return Infinity;
+/** Mean distance from each point in `from` to its nearest point in `to`. */
+function meanNearestDistance(from: Point[], to: Point[]): number {
+  if (from.length === 0 || to.length === 0) return Infinity;
   let sum = 0;
-  for (let i = 0; i < n; i++) {
-    sum += distance(a[i], b[i]);
+  for (const p of from) {
+    let best = Infinity;
+    for (const q of to) {
+      const d = distance(p, q);
+      if (d < best) best = d;
+    }
+    sum += best;
   }
-  return sum / n;
+  return sum / from.length;
+}
+
+/**
+ * Order-invariant shape distance between two point clouds: for every point
+ * in `a`, distance to its nearest neighbor in `b`, averaged, and
+ * symmetrically the other way, then combined. Unlike an index-aligned
+ * point-to-point distance, this doesn't care what order or direction the
+ * points were traced in - two strokes drawn in a different (but equally
+ * valid) order, or a single stroke traced backwards, still compare as
+ * identical shapes. That matters a lot for multi-stroke characters, where
+ * there's no single "correct" stroke order a real writer will reliably
+ * match.
+ */
+export function symmetricNearestDistance(a: Point[], b: Point[]): number {
+  return (meanNearestDistance(a, b) + meanNearestDistance(b, a)) / 2;
 }

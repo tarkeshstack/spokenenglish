@@ -35,6 +35,7 @@ export const LANGUAGES: LanguageDef[] = [
     name: "English",
     nativeName: "English",
     flagEmoji: "🇬🇧",
+    speechLocale: "en-US",
     modes: { alphabet: ENGLISH_ALPHABET, numbers: LATIN_NUMBERS },
   },
   {
@@ -42,6 +43,7 @@ export const LANGUAGES: LanguageDef[] = [
     name: "Spanish",
     nativeName: "Español",
     flagEmoji: "🇪🇸",
+    speechLocale: "es-ES",
     modes: { alphabet: SPANISH_ALPHABET, numbers: LATIN_NUMBERS },
   },
   {
@@ -49,6 +51,7 @@ export const LANGUAGES: LanguageDef[] = [
     name: "Hindi",
     nativeName: "हिन्दी",
     flagEmoji: "🇮🇳",
+    speechLocale: "hi-IN",
     modes: { alphabet: HINDI_ALPHABET, numbers: HINDI_NUMBERS },
   },
   {
@@ -56,6 +59,7 @@ export const LANGUAGES: LanguageDef[] = [
     name: "Tamil",
     nativeName: "தமிழ்",
     flagEmoji: "🇮🇳",
+    speechLocale: "ta-IN",
     modes: { alphabet: TAMIL_ALPHABET, numbers: TAMIL_NUMBERS },
   },
   {
@@ -63,6 +67,7 @@ export const LANGUAGES: LanguageDef[] = [
     name: "Kannada",
     nativeName: "ಕನ್ನಡ",
     flagEmoji: "🇮🇳",
+    speechLocale: "kn-IN",
     modes: { alphabet: KANNADA_ALPHABET, numbers: KANNADA_NUMBERS },
   },
 ];

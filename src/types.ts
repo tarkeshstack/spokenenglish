@@ -15,5 +15,7 @@ export interface LanguageDef {
   name: string;
   nativeName: string;
   flagEmoji: string;
+  /** BCP-47 locale passed to the device's text-to-speech engine. */
+  speechLocale: string;
   modes: Partial<Record<PracticeMode, CharacterDef[]>>;
 }

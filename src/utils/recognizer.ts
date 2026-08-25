@@ -1,13 +1,13 @@
 import {
   Point,
   Stroke,
-  averagePointDistance,
   flattenStrokes,
-  pathLength,
-  resample,
+  normalize,
+  resampleStrokes,
+  robustBoundingBox,
   rotateBy,
-  scaleToSquare,
-  translateToOrigin,
+  strokesPathLength,
+  symmetricNearestDistance,
 } from "./geometry";
 
 const RESAMPLE_POINTS = 64;
@@ -19,16 +19,28 @@ const SQUARE_SIZE = 100;
 const MAX_ROTATION_DEGREES = 20;
 const ROTATION_STEP_DEGREES = 2;
 
-/** Translate + uniform-scale only (no rotation) - orientation must be preserved. */
-function normalize(points: Point[]): Point[] {
-  const scaled = scaleToSquare(points, SQUARE_SIZE);
-  return translateToOrigin(scaled);
+/** Scales every stroke into the fixed comparison square using ONE shared
+ * transform derived from the combined bounding box of all strokes (so
+ * relative proportions between strokes are preserved), keeping strokes
+ * separate rather than flattening them into one point list. */
+function normalizeStrokes(strokes: Stroke[]): Stroke[] {
+  const box = robustBoundingBox(flattenStrokes(strokes));
+  const width = box.width || 1;
+  const height = box.height || 1;
+  return strokes.map((stroke) =>
+    stroke.map((p) => ({
+      x: ((p.x - box.minX) / width) * SQUARE_SIZE,
+      y: ((p.y - box.minY) / height) * SQUARE_SIZE,
+    }))
+  );
 }
 
-/** Best-fit average distance between two already-normalized point clouds,
- * searching a small window of rotation to tolerate natural hand tilt. */
+/** Best-fit order-invariant distance between two already-normalized point
+ * clouds, searching a small window of rotation to tolerate natural hand
+ * tilt. Order-invariance (see symmetricNearestDistance) means this doesn't
+ * care what order or direction strokes were drawn in - only overall shape. */
 function bestDistance(candidate: Point[], template: Point[]): number {
-  let best = averagePointDistance(candidate, template);
+  let best = symmetricNearestDistance(candidate, template);
   for (
     let deg = -MAX_ROTATION_DEGREES;
     deg <= MAX_ROTATION_DEGREES;
@@ -36,7 +48,7 @@ function bestDistance(candidate: Point[], template: Point[]): number {
   ) {
     if (deg === 0) continue;
     const rotated = rotateBy(candidate, (deg * Math.PI) / 180);
-    const d = averagePointDistance(rotated, template);
+    const d = symmetricNearestDistance(rotated, template);
     if (d < best) best = d;
   }
   return best;
@@ -75,7 +87,7 @@ function coverageRatio(userPoints: Point[], templatePoints: Point[]): number {
 export function scoreAttempt(
   userStrokes: Stroke[],
   templateStrokes: Stroke[],
-  threshold = 0.9
+  threshold = 0.85
 ): MatchResult {
   const userPoints = flattenStrokes(userStrokes);
   const templatePoints = flattenStrokes(templateStrokes);
@@ -84,17 +96,25 @@ export function scoreAttempt(
     return { score: 0, coverage: 0, matched: false };
   }
 
-  // Path-length ratio (on the un-resampled, translate+scale-normalized
-  // points) catches sparse scribbles that happen to land near the right
-  // silhouette: a real trace of a multi-stroke letter has comparable total
-  // ink length to the template once both are scaled to the same box.
-  const rawUserLen = pathLength(normalize(userPoints));
-  const rawTemplateLen = pathLength(normalize(templatePoints));
-  const lengthRatio =
-    Math.min(rawUserLen, rawTemplateLen) / Math.max(rawUserLen, rawTemplateLen, 1);
+  // Path-length ratio, computed per-stroke and summed (not on a flattened/
+  // concatenated point list) so the straight-line "jump" between one
+  // stroke's end and the next stroke's start never gets counted as ink -
+  // that jump's length depends entirely on what order the strokes happen
+  // to be drawn in, which has nothing to do with how much was actually
+  // written.
+  const userLen = strokesPathLength(normalizeStrokes(userStrokes));
+  const templateLen = strokesPathLength(normalizeStrokes(templateStrokes));
+  const lengthRatio = Math.min(userLen, templateLen) / Math.max(userLen, templateLen, 1);
 
-  const normalizedUser = normalize(resample(userPoints, RESAMPLE_POINTS));
-  const normalizedTemplate = normalize(resample(templatePoints, RESAMPLE_POINTS));
+  // Resample each stroke independently (proportional to its own length)
+  // rather than resampling the flattened point list, for the same reason:
+  // a phantom inter-stroke jump would otherwise soak up resample points
+  // and shift depending on stroke order.
+  const normalizedUser = normalize(resampleStrokes(userStrokes, RESAMPLE_POINTS), SQUARE_SIZE);
+  const normalizedTemplate = normalize(
+    resampleStrokes(templateStrokes, RESAMPLE_POINTS),
+    SQUARE_SIZE
+  );
 
   const dist = bestDistance(normalizedUser, normalizedTemplate);
   const shapeScore = Math.max(0, 1 - dist / (0.5 * DIAGONAL));
