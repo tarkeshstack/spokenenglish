@@ -20,7 +20,6 @@ const ENGLISH_ALPHABET = Object.keys(LATIN_LETTERS)
   .filter((id) => id !== "Ñ")
   .map((id) => ({ id, display: id, strokes: LATIN_LETTERS[id] }));
 
-const SPANISH_ALPHABET = charsFrom(LATIN_LETTERS);
 const LATIN_NUMBERS = charsFrom(LATIN_DIGITS);
 const HINDI_ALPHABET = charsFrom(DEVANAGARI_VOWELS, DEVANAGARI_CONSONANTS);
 const HINDI_NUMBERS = charsFrom(DEVANAGARI_DIGITS);
@@ -38,14 +37,8 @@ export const LANGUAGES: LanguageDef[] = [
     speechLocale: "en-US",
     modes: { alphabet: ENGLISH_ALPHABET, numbers: LATIN_NUMBERS },
   },
-  {
-    id: "es",
-    name: "Spanish",
-    nativeName: "Español",
-    flagEmoji: "🇪🇸",
-    speechLocale: "es-ES",
-    modes: { alphabet: SPANISH_ALPHABET, numbers: LATIN_NUMBERS },
-  },
+  // Spanish removed for now - LATIN_LETTERS/LATIN_NUMBERS below are still
+  // used by English, so re-adding it later is just restoring this entry.
   {
     id: "hi",
     name: "Hindi",

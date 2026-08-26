@@ -39,7 +39,9 @@ export function HomeScreen({ onStart, onViewScores }: HomeScreenProps) {
       if (cancelled) return;
       setScores(s);
       const last = getLastSelection(s);
-      if (last) {
+      // Ignore a saved selection for a language that no longer exists
+      // (e.g. temporarily removed) rather than getting stuck on it.
+      if (last && getLanguage(last.languageId)) {
         setLanguageId(last.languageId);
         setMode(last.mode);
       }
