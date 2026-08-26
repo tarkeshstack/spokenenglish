@@ -77,83 +77,110 @@ export function HomeScreen({ onStart, onViewScores }: HomeScreenProps) {
   const totalPoints = Object.values(scores.languages).reduce((sum, l) => sum + l.points, 0);
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + 20 }]}
-    >
-      <Text style={styles.title}>Writing Practice</Text>
-      <Text style={styles.subtitle}>Trace letters and numbers with your finger or a stylus</Text>
-
-      <TouchableOpacity style={styles.scoreCard} onPress={onViewScores} activeOpacity={0.8}>
-        <View>
-          <Text style={styles.scoreLabel}>Total score</Text>
-          <Text style={styles.scoreValue}>{totalPoints} pts</Text>
-        </View>
-        <Text style={styles.scoreLink}>View scoreboard ›</Text>
-      </TouchableOpacity>
-
-      <LanguageDropdown languages={LANGUAGES} selectedId={languageId} onSelect={setLanguageId} />
-
-      <View style={styles.modeTabs}>
-        {availableModes.map((m) => (
-          <TouchableOpacity
-            key={m}
-            style={[styles.modeTab, mode === m && styles.modeTabActive]}
-            onPress={() => setMode(m)}
-            activeOpacity={0.85}
-          >
-            <Text style={[styles.modeTabText, mode === m && styles.modeTabTextActive]}>
-              {MODE_LABELS[m]}
-            </Text>
-          </TouchableOpacity>
-        ))}
+    <View style={styles.root}>
+      {/* Fixed tricolor backdrop behind the scrolling content - saffron and
+       * white are pinned near the top (roughly the header/score-card
+       * region), green flex-fills everything below so it always covers
+       * the full scroll height regardless of how long the character
+       * grid gets for a given language. */}
+      <View style={styles.flagBackground} pointerEvents="none">
+        <View style={styles.bandSaffron} />
+        <View style={styles.bandWhite} />
+        <View style={styles.bandGreen} />
       </View>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 20 }]}
+      >
+        <Text style={styles.title}>Writing Practice</Text>
+        <Text style={styles.subtitle}>Trace letters and numbers with your finger or a stylus</Text>
 
-      <View style={styles.actionsRow}>
-        {hasProgress && (
-          <TouchableOpacity
-            style={styles.primaryAction}
-            onPress={() => onStart(languageId, mode, lastIndex)}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.primaryActionText}>
-              ▶ Resume ({lastIndex + 1}/{characters.length})
-            </Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          style={[styles.secondaryAction, !hasProgress && styles.primaryAction]}
-          onPress={() => onStart(languageId, mode, 0)}
-          activeOpacity={0.85}
-        >
-          <Text style={[styles.secondaryActionText, !hasProgress && styles.primaryActionText]}>
-            {hasProgress ? "↺ Start again" : "▶ Start practice"}
-          </Text>
+        <TouchableOpacity style={styles.scoreCard} onPress={onViewScores} activeOpacity={0.8}>
+          <View>
+            <Text style={styles.scoreLabel}>Total score</Text>
+            <Text style={styles.scoreValue}>{totalPoints} pts</Text>
+          </View>
+          <Text style={styles.scoreLink}>View scoreboard ›</Text>
         </TouchableOpacity>
-      </View>
 
-      <Text style={styles.gridHeading}>Jump to any character</Text>
-      <CharacterGrid
-        characters={characters}
-        mode={mode}
-        stats={stats}
-        currentIndex={hasProgress ? lastIndex : undefined}
-        onSelect={(index) => onStart(languageId, mode, index)}
-      />
+        <LanguageDropdown languages={LANGUAGES} selectedId={languageId} onSelect={setLanguageId} />
 
-      <Text style={styles.footerNote}>
-        Practice guides are simplified stroke outlines to help you learn the basic shape and stroke
-        order.
-      </Text>
-    </ScrollView>
+        <View style={styles.modeTabs}>
+          {availableModes.map((m) => (
+            <TouchableOpacity
+              key={m}
+              style={[styles.modeTab, mode === m && styles.modeTabActive]}
+              onPress={() => setMode(m)}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.modeTabText, mode === m && styles.modeTabTextActive]}>
+                {MODE_LABELS[m]}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.actionsRow}>
+          {hasProgress && (
+            <TouchableOpacity
+              style={styles.primaryAction}
+              onPress={() => onStart(languageId, mode, lastIndex)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.primaryActionText}>
+                ▶ Resume ({lastIndex + 1}/{characters.length})
+              </Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={[styles.secondaryAction, !hasProgress && styles.primaryAction]}
+            onPress={() => onStart(languageId, mode, 0)}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.secondaryActionText, !hasProgress && styles.primaryActionText]}>
+              {hasProgress ? "↺ Start again" : "▶ Start practice"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.gridHeading}>Jump to any character</Text>
+        <CharacterGrid
+          characters={characters}
+          mode={mode}
+          stats={stats}
+          currentIndex={hasProgress ? lastIndex : undefined}
+          onSelect={(index) => onStart(languageId, mode, index)}
+        />
+
+        <Text style={styles.footerNote}>
+          Practice guides are simplified stroke outlines to help you learn the basic shape and
+          stroke order.
+        </Text>
+      </ScrollView>
+    </View>
   );
 }
 
+const SAFFRON = "#FF9933";
+const INDIA_GREEN = "#138808";
+const NAVY = "#0f1c4d";
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f4f5fb" },
+  root: { flex: 1, backgroundColor: INDIA_GREEN },
+  flagBackground: { ...StyleSheet.absoluteFill },
+  bandSaffron: { height: 120, backgroundColor: SAFFRON },
+  bandWhite: { height: 110, backgroundColor: "#ffffff" },
+  bandGreen: { flex: 1, backgroundColor: INDIA_GREEN },
+  container: { flex: 1, backgroundColor: "transparent" },
   content: { padding: 20, paddingBottom: 40 },
-  title: { fontSize: 28, fontWeight: "800", color: "#1f2340" },
-  subtitle: { fontSize: 14, color: "#6b7099", marginTop: 4, marginBottom: 20 },
+  title: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: NAVY,
+    textShadowColor: "rgba(255,255,255,0.35)",
+    textShadowRadius: 4,
+  },
+  subtitle: { fontSize: 14, color: "#1f2340", marginTop: 4, marginBottom: 20 },
   scoreCard: {
     backgroundColor: "#4338ca",
     borderRadius: 16,
@@ -168,7 +195,7 @@ const styles = StyleSheet.create({
   scoreLink: { color: "#e0e7ff", fontSize: 13, fontWeight: "600" },
   modeTabs: {
     flexDirection: "row",
-    backgroundColor: "#eef0fb",
+    backgroundColor: "#ffffff",
     borderRadius: 14,
     padding: 4,
     marginTop: 12,
@@ -194,12 +221,26 @@ const styles = StyleSheet.create({
   primaryActionText: { color: "#ffffff", fontWeight: "700", fontSize: 14 },
   secondaryAction: {
     flex: 1,
-    backgroundColor: "#eef0fb",
+    backgroundColor: "#ffffff",
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: "center",
   },
   secondaryActionText: { color: "#4338ca", fontWeight: "700", fontSize: 14 },
-  gridHeading: { fontSize: 14, fontWeight: "700", color: "#1f2340", marginTop: 24, marginBottom: 12 },
-  footerNote: { fontSize: 12, color: "#9296b8", textAlign: "center", marginTop: 24, lineHeight: 18 },
+  gridHeading: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#ffffff",
+    marginTop: 24,
+    marginBottom: 12,
+    textShadowColor: "rgba(0,0,0,0.25)",
+    textShadowRadius: 3,
+  },
+  footerNote: {
+    fontSize: 12,
+    color: "#eafaf0",
+    textAlign: "center",
+    marginTop: 24,
+    lineHeight: 18,
+  },
 });
