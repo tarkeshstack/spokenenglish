@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { LinearGradient } from "expo-linear-gradient";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AshokaChakra } from "../components/AshokaChakra";
 import { CharacterGrid } from "../components/CharacterGrid";
+import { LanguageChips } from "../components/LanguageChips";
 import { LanguageDropdown } from "../components/LanguageDropdown";
 import { LANGUAGES, getLanguage } from "../data/languages";
 import { PracticeMode } from "../types";
@@ -78,20 +81,21 @@ export function HomeScreen({ onStart, onViewScores }: HomeScreenProps) {
 
   return (
     <View style={styles.root}>
-      {/* Fixed tricolor backdrop behind the scrolling content - saffron and
-       * white are pinned near the top (roughly the header/score-card
-       * region), green flex-fills everything below so it always covers
-       * the full scroll height regardless of how long the character
-       * grid gets for a given language. */}
-      <View style={styles.flagBackground} pointerEvents="none">
-        <View style={styles.bandSaffron} />
-        <View style={styles.bandWhite} />
-        <View style={styles.bandGreen} />
+      <LinearGradient
+        colors={["#fdf1e0", "#fffdf9", "#eef8f0"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <View style={styles.chakraWrap} pointerEvents="none">
+        <AshokaChakra size={380} />
       </View>
       <ScrollView
         style={styles.container}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 20 }]}
       >
+        <LanguageChips />
         <Text style={styles.title}>Writing Practice</Text>
         <Text style={styles.subtitle}>Trace letters and numbers with your finger or a stylus</Text>
 
@@ -161,26 +165,25 @@ export function HomeScreen({ onStart, onViewScores }: HomeScreenProps) {
   );
 }
 
-const SAFFRON = "#FF9933";
-const INDIA_GREEN = "#138808";
-const NAVY = "#0f1c4d";
-
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: INDIA_GREEN },
-  flagBackground: { ...StyleSheet.absoluteFill },
-  bandSaffron: { height: 120, backgroundColor: SAFFRON },
-  bandWhite: { height: 110, backgroundColor: "#ffffff" },
-  bandGreen: { flex: 1, backgroundColor: INDIA_GREEN },
+  root: { flex: 1, backgroundColor: "#fffdf9", overflow: "hidden" },
+  chakraWrap: {
+    position: "absolute",
+    top: 140,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
   container: { flex: 1, backgroundColor: "transparent" },
   content: { padding: 20, paddingBottom: 40 },
-  title: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: NAVY,
-    textShadowColor: "rgba(255,255,255,0.35)",
-    textShadowRadius: 4,
+  title: { fontSize: 28, fontWeight: "800", color: "#1f2340", textAlign: "center" },
+  subtitle: {
+    fontSize: 14,
+    color: "#6b7099",
+    marginTop: 4,
+    marginBottom: 20,
+    textAlign: "center",
   },
-  subtitle: { fontSize: 14, color: "#1f2340", marginTop: 4, marginBottom: 20 },
   scoreCard: {
     backgroundColor: "#4338ca",
     borderRadius: 16,
@@ -195,7 +198,7 @@ const styles = StyleSheet.create({
   scoreLink: { color: "#e0e7ff", fontSize: 13, fontWeight: "600" },
   modeTabs: {
     flexDirection: "row",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#eef0fb",
     borderRadius: 14,
     padding: 4,
     marginTop: 12,
@@ -221,26 +224,12 @@ const styles = StyleSheet.create({
   primaryActionText: { color: "#ffffff", fontWeight: "700", fontSize: 14 },
   secondaryAction: {
     flex: 1,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#eef0fb",
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: "center",
   },
   secondaryActionText: { color: "#4338ca", fontWeight: "700", fontSize: 14 },
-  gridHeading: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#ffffff",
-    marginTop: 24,
-    marginBottom: 12,
-    textShadowColor: "rgba(0,0,0,0.25)",
-    textShadowRadius: 3,
-  },
-  footerNote: {
-    fontSize: 12,
-    color: "#eafaf0",
-    textAlign: "center",
-    marginTop: 24,
-    lineHeight: 18,
-  },
+  gridHeading: { fontSize: 14, fontWeight: "700", color: "#1f2340", marginTop: 24, marginBottom: 12 },
+  footerNote: { fontSize: 12, color: "#9296b8", textAlign: "center", marginTop: 24, lineHeight: 18 },
 });
